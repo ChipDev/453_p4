@@ -3,6 +3,7 @@ Blake: Phase I
 	- Creating "disk driver" which should just be a .c, .h file
 	- Exposes API/functions that 'just work'
 Everyone: Phase I
+	- Blake: Making structs that make each block type digestible (blocktypes.h)
 	- mkfs 
 	- tfs_mount, unmount
 	- tfs_open, close, write, deleteFile
