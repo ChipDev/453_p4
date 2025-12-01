@@ -4,3 +4,9 @@
  * to make it modular and easy to digest and debug.
 */
 
+typedef enum {
+	SUPERBLOCK = 1,
+	INODE = 2,
+	FILEEXTENT = 3,
+	FREE = 4
+} blocktype;
