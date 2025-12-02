@@ -1,10 +1,21 @@
+#ifndef LIBDISK_H
+#define LIBDISK_H
 /*
  *
  * libdisk header file
- *
+ * also define the error codes here
  */ 
 
 #define BLOCKSIZE 256
+
+#define GENERIC_ERROR -1
+#define DISK_ALLOC_ERROR -2
+#define OPEN_DISK_PARAM_ERR -3
+#define OPEN_DISK_FILE_ERR -4
+#define DISK_CLOSE_ERR -5
+#define DISK_NOT_OPEN -6
+#define DISK_IO_ERR -7
+#define BUF_NULL -8
 
 // Internally we maintain a list of the open disks, which need the used bit, fd, nBytes
 // used bit becasue I'm not writing a dynamic list in C... 
@@ -44,4 +55,4 @@ the file. On success, it returns 0. -1 or smaller is returned if disk
 is not available (i.e. hasn’t been opened) or any other failures. You
 must define your own error code system. */
 int writeBlock(int disk, int bNum, void *block);
-
+#endif
