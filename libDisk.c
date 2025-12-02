@@ -130,11 +130,11 @@ int readBlock(int disk, int bNum, void *block) {
 int writeBlock(int disk, int bNum, void *block) {
 	if(!isOpen(disk)) return DISK_NOT_OPEN;
 	if(!block) return BUF_NULL;
-	off_t offset = bNum * BLOCK_SIZE;
+	off_t offset = bNum * BLOCKSIZE;
 	if(lseek(disks[disk].fd, offset, SEEK_SET) < 0) return DISK_IO_ERR;
 	//can do a repeat write at different offsets, should be good for now
 	// writeBlock only writes 1 block !!
-	int wrote = write(disks[disk].fd, offset, BLOCKSIZE);
+	int wrote = write(disks[disk].fd, block, BLOCKSIZE);
 	if(wrote < 0) { return DISK_IO_ERR; }
 	if(wrote != BLOCKSIZE) { printf("DEBUG !! Wrote %d not %d blocksize", wrote, BLOCKSIZE); }
 	return 0; 
