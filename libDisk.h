@@ -1,7 +1,9 @@
+#ifndef LIBDISK_H
+#define LIBDISK_H
 /*
  *
  * libdisk header file
- *
+ * also define the error codes here
  */ 
 
 #define BLOCKSIZE 256
@@ -44,4 +46,4 @@ the file. On success, it returns 0. -1 or smaller is returned if disk
 is not available (i.e. hasn’t been opened) or any other failures. You
 must define your own error code system. */
 int writeBlock(int disk, int bNum, void *block);
-
+#endif
