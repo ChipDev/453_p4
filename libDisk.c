@@ -9,6 +9,9 @@
 #include <unistd.h>
 #include <stdint.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <stdio.h>
 
 #define ALLOC_DISKS 10
 
@@ -44,6 +47,7 @@ static int next_free_disk() {
 
 int openDisk(char *filename, int nBytes) {
 	int bs = nBytes;
+	if(bs < 0) return OPEN_DISK_PARAM_ERR;
 	if(bs == 0) {
 		//open disk (happens after if elif)
 	}
@@ -78,7 +82,7 @@ int openDisk(char *filename, int nBytes) {
 		fd = open(filename, O_RDWR | O_CREAT, 0666); //0 666 octal is default for files
 	//	struct stat st;
 		if(fd < 0) {
-			reutrn OPEN_DISK_FILE_ERR;
+			return OPEN_DISK_FILE_ERR;
 		}
 		//ftruncate changes the file size, doens't just decrease
 		if(ftruncate(fd, bs) < 0) {
@@ -88,18 +92,20 @@ int openDisk(char *filename, int nBytes) {
 		disks[diskn].flags = 1;
 		disks[diskn].fd = fd;
 		disks[diskn].nBytes = bs;
-		disks[diskn].nBlcoks = bs / BLOCKSIZE;
+		disks[diskn].nBlocks = bs / BLOCKSIZE;
 	}
 	return diskn;
 }
 
-int closeDisk(int disk) {
+int closeDisk(int diskn) {
 	if(disks[diskn].flags) {
-		disks[diskn] = {0};
-		disks[diskn].fd = -1;
+		//disks[diskn] = {0};
+		//disks[diskn].fd = -1;
 		if(close(disk[diskn].fd) != 0) {
 			return DISK_CLOSE_ERR;
 		}
+		disks[diskn] = {0};
+		disks[diskn].fd = -1;
 		return 0;
 	}else{
 		return DISK_NOT_OPEN;
