@@ -114,18 +114,22 @@ int closeDisk(int diskn) {
 
 int readBlock(int disk, int bNum, void *block) {
 	if(!isOpen(disk)) return DISK_NOT_OPEN;
+	if(!block) return BUF_NULL;
 	//lseek uses off_t, is this just a uint64? idk
-	off_t offset = bNum * BLOCK_SIZE;
+	off_t offset = bNum * BLOCKSIZE;
 	if(lseek(disks[disk].fd, offset, SEEK_SET) < 0) return DISK_IO_ERR;
 	int read_b = 0;
 	if((read_b = read(disks[disk].fd, block, BLOCKSIZE)) != BLOCKSIZE) {
 		printf("DEBUG !! Read different number than BLOCKSIZE: %d\n", read_b);
 		return DISK_IO_ERR;
 	}
+	//good
+	return 0;
 }
 
 int writeBlock(int disk, int bNum, void *block) {
 	if(!isOpen(disk)) return DISK_NOT_OPEN;
+	if(!block) return BUF_NULL;
 	off_t offset = bNum * BLOCK_SIZE;
 	if(lseek(disks[disk].fd, offset, SEEK_SET) < 0) return DISK_IO_ERR;
 	//can do a repeat write at different offsets, should be good for now

@@ -15,6 +15,7 @@
 #define DISK_CLOSE_ERR -5
 #define DISK_NOT_OPEN -6
 #define DISK_IO_ERR -7
+#define BUF_NULL -8
 
 // Internally we maintain a list of the open disks, which need the used bit, fd, nBytes
 // used bit becasue I'm not writing a dynamic list in C... 
