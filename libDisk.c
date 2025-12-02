@@ -22,7 +22,7 @@ typedef struct {
 	int nBlocks; //should map cleanly but from what I read good practice 
 } disk_entry;
 
-static disk_entry disks[ALLOC_DISKS] = {0}
+static disk_entry disks[ALLOC_DISKS] = {0};
 
 static int isOpen(int disk) {
 	if(disk >= 0 && disk < ALLOC_DISKS && disks[disk].flags) {
@@ -101,10 +101,10 @@ int closeDisk(int diskn) {
 	if(disks[diskn].flags) {
 		//disks[diskn] = {0};
 		//disks[diskn].fd = -1;
-		if(close(disk[diskn].fd) != 0) {
+		if(close(disks[diskn].fd) != 0) {
 			return DISK_CLOSE_ERR;
 		}
-		disks[diskn] = {0};
+		disks[diskn].flags = 0;
 		disks[diskn].fd = -1;
 		return 0;
 	}else{
@@ -120,7 +120,7 @@ int readBlock(int disk, int bNum, void *block) {
 	if(lseek(disks[disk].fd, offset, SEEK_SET) < 0) return DISK_IO_ERR;
 	int read_b = 0;
 	if((read_b = read(disks[disk].fd, block, BLOCKSIZE)) != BLOCKSIZE) {
-		printf("DEBUG !! Read different number than BLOCKSIZE: %d\n", read_b);
+		//printf("DEBUG !! Read different number than BLOCKSIZE: %d\n", read_b);
 		return DISK_IO_ERR;
 	}
 	//good
@@ -136,6 +136,6 @@ int writeBlock(int disk, int bNum, void *block) {
 	// writeBlock only writes 1 block !!
 	int wrote = write(disks[disk].fd, block, BLOCKSIZE);
 	if(wrote < 0) { return DISK_IO_ERR; }
-	if(wrote != BLOCKSIZE) { printf("DEBUG !! Wrote %d not %d blocksize", wrote, BLOCKSIZE); }
+	//if(wrote != BLOCKSIZE) { printf("DEBUG !! Wrote %d not %d blocksize", wrote, BLOCKSIZE); }
 	return 0; 
 }
