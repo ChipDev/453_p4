@@ -10,9 +10,12 @@
 #include <string.h>
 #include "blocktypes.h"
 
+//Only a single disk may be mounted at a time.
+static int disk_no = -1;
+
 int tfs_mkfs(char *filename, int nBytes) {
-	if(!filename) return ERR_FS_INVALID;
-	if(strlen(filename) == 0 || strlen(filename) > 8) return ERR_FS_INVALID;
+	if(!filename) return ERR_FS_NAME;
+	if(strlen(filename) == 0 || strlen(filename) > 8) return ERR_FS_NAME;
 	// block 0: superblock
 	// block 1: root inode
 	int nb = nBytes;
@@ -62,5 +65,32 @@ int tfs_mkfs(char *filename, int nBytes) {
 			return ERR_DISK_WRITE;
 		}		
 	} 
+	return TFS_SUCCESS;
+}
+
+int tfs_mount(char *diskname){
+	if(disk_no != -1) return ERR_ALREADY_MOUNTED;
+	int disk_attempt_open = openDisk(diskname, 0); //dont overwrite.
+	if(disk_attempt_open < 0) { return ERR_DISK_OPEN; }
+	disk_no = disk_attempt_open;
+	superblock_disk sb = {0};
+	int validate = readBlock(disk_no, 0, &sb);
+	if(validate < 0) { 
+		closeDisk(disk_no);
+		disk_no = -1; 
+		return ERR_DISK_READ; 	
+	}
+	if(sb.magic != MAGIC || sb.blocktype != SUPERBLOCK) {
+		closeDisk(disk_no);
+		disk_no = -1;
+		return ERR_FS_INVALID;
+	}
+	return TFS_SUCCESS;
+}
+
+int tfs_unmount(void) {
+	if(disk_no == -1) return ERR_NOT_MOUNTED;
+	if(closeDisk(disk_no) != TFS_SUCCESS) return ERR_DISK_CLOSE; 
+	disk_no = -1;
 	return TFS_SUCCESS;
 }
