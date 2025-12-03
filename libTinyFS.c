@@ -8,6 +8,8 @@
 #include "libDisk.h"
 #include "TinyFS_errno.h"
 #include <string.h>
+#include <stdio.h>
+#include <time.h>
 #include "blocktypes.h"
 
 //maximum open files at a time
@@ -58,6 +60,12 @@ int tfs_mkfs(char *filename, int nBytes) {
 	rin.size_B = 0;
 	rin.blk_start = 0;	//we're using 0 now instead of -1
 	rin.metaflags = INODE_INITIAL_FLAGS; 
+
+	// new: initialize root inode timestamps
+	time_t now = time(NULL);
+	rin.ctime = (uint32_t)now;
+	rin.mtime = (uint32_t)now;
+	rin.atime = (uint32_t)now;
 
 	if(writeBlock(disk, ROOT_INODE_BLOCK, &rin) != TFS_SUCCESS) {
 		closeDisk(disk); 
@@ -339,30 +347,36 @@ int tfs_writeFile(fileDescriptor FD, char *buffer, int size) {
 int tfs_deleteFile(fileDescriptor FD) {
     if (disk_no == -1) return ERR_NOT_MOUNTED;
     if (!isValidFD(FD)) return ERR_FD_INVALID;
+
     int inodeBlock = openFiles[FD].inodeBlock;
-	// read the inode to get the data block chain
+
+    // read the inode to get the data block chain
     inode_disk inode;
     if (readBlock(disk_no, inodeBlock, &inode) != TFS_SUCCESS) {
         return ERR_DISK_READ;
-    } // free all data blocks
+    }
+
+    // free all data blocks
     int currentBlock = inode.blk_start;
     while (currentBlock != 0) {
         fileextent_disk extent;
         if (readBlock(disk_no, currentBlock, &extent) != TFS_SUCCESS) {
-            break;
+            break;  // don't leak blocks because of a read error, but bail
         }
         int nextBlock = extent.blk_next;
         free_block(currentBlock);
         currentBlock = nextBlock;
     }
-    // free the inode block
+
+    // free the inode block itself
     free_block(inodeBlock);
-	// clear resource table entry
+
+    // clear resource table entry
     openFiles[FD].inUse = 0;
     openFiles[FD].inodeBlock = -1;
     openFiles[FD].filePointer = 0;
     openFiles[FD].name[0] = '\0';
-    
+
     return TFS_SUCCESS;
 }
 
@@ -370,16 +384,139 @@ int tfs_seek(fileDescriptor FD, int offset) {
     if (disk_no == -1) return ERR_NOT_MOUNTED;
     if (!isValidFD(FD)) return ERR_FD_INVALID;
     if (offset < 0) return ERR_SEEK;
+
     // read inode to get file size
     inode_disk inode;
     if (readBlock(disk_no, openFiles[FD].inodeBlock, &inode) != TFS_SUCCESS) {
         return ERR_DISK_READ;
     }
-    // checlk if offset is within file size
-    if (offset > inode.size_B) {
+
+    // check if offset is within file size
+    if (offset > (int)inode.size_B) {
         return ERR_SEEK;
     }
-    //set file pointer to new offset
+
+    // set file pointer to new offset
     openFiles[FD].filePointer = offset;
+    return TFS_SUCCESS;
+}
+
+/* Helper: load inode given a fileDescriptor (uses openFiles table) */
+static int load_inode_from_fd(fileDescriptor FD, inode_disk *inodeOut, int *blkNumOut) {
+    if (disk_no == -1) return ERR_NOT_MOUNTED;
+    if (!isValidFD(FD)) return ERR_FD_INVALID;
+    if (!inodeOut) return ERR_FS_INVALID;
+
+    int inodeBlock = openFiles[FD].inodeBlock;
+
+    if (readBlock(disk_no, inodeBlock, inodeOut) != TFS_SUCCESS)
+        return ERR_DISK_READ;
+
+    if (inodeOut->blocktype != INODE || inodeOut->magic != MAGIC)
+        return ERR_FS_INVALID;
+
+    if (blkNumOut) *blkNumOut = inodeBlock;
+    return TFS_SUCCESS;
+}
+
+int tfs_rename(fileDescriptor FD, char *newName) {
+    if (disk_no == -1) return ERR_NOT_MOUNTED;
+    if (!isValidFD(FD)) return ERR_FD_INVALID;
+    if (!newName) return ERR_FILE_NAME;
+
+    size_t len = strlen(newName);
+    if (len == 0 || len > 8) return ERR_FILE_NAME; // keep same limit as tfs_openFile
+
+    inode_disk inode;
+    int inodeBlock;
+    int rc = load_inode_from_fd(FD, &inode, &inodeBlock);
+    if (rc < 0) return rc;
+
+    // copy new name into fixed array
+    memset(inode.name, 0, sizeof(inode.name));
+    memcpy(inode.name, newName, len);
+
+    // update timestamps: metadata change
+    time_t now = time(NULL);
+    inode.mtime = (uint32_t)now;
+    inode.atime = (uint32_t)now;
+
+    if (writeBlock(disk_no, inodeBlock, &inode) != TFS_SUCCESS)
+        return ERR_DISK_WRITE;
+
+    // keep resource table in sync with the inode
+    strncpy(openFiles[FD].name, newName, 8);
+    openFiles[FD].name[8] = '\0';
+
+    return TFS_SUCCESS;
+}
+
+int tfs_readdir(void) {
+    if (disk_no == -1) return ERR_NOT_MOUNTED;
+
+    printf("TinyFS directory listing:\n");
+
+    int blk = 1;     // start at root inode
+    int first = 1;
+
+    while (1) {
+        inode_disk inode;
+        int rc = readBlock(disk_no, blk, &inode);
+        if (rc != TFS_SUCCESS) break; // assume past end of disk / error
+
+        if (inode.blocktype == INODE && inode.magic == MAGIC) {
+            // skip "empty" inodes (except root)
+            if (blk != ROOT_INODE_BLOCK &&
+                inode.name[0] == '\0' &&
+                inode.size_B == 0) {
+                blk++;
+                continue;
+            }
+
+            char nameBuf[10] = {0}; // 9 chars + NUL
+            strncpy(nameBuf, inode.name, 9);
+            nameBuf[9] = '\0';
+
+            printf("    block %2d %-9s  %u bytes\n",
+                   blk, nameBuf, (unsigned)inode.size_B);
+
+            first = 0;
+        }
+
+        blk++;
+    }
+
+    if (first) {
+        printf("  [no files]\n");
+    }
+
+    return TFS_SUCCESS;
+}
+
+int tfs_readFileInfo(fileDescriptor FD, tfsFileInfo *out) {
+    if (disk_no == -1) return ERR_NOT_MOUNTED;
+    if (!isValidFD(FD)) return ERR_FD_INVALID;
+    if (!out) return ERR_FS_INVALID;
+
+    inode_disk inode;
+    int inodeBlock;
+    int rc = load_inode_from_fd(FD, &inode, &inodeBlock);
+    if (rc < 0) return rc;
+
+    memset(out, 0, sizeof(*out));
+
+    // copy name
+    strncpy(out->name, inode.name, 8);
+    out->name[8] = '\0';
+
+    out->size_B     = (int)inode.size_B;
+    out->ctime      = (time_t)inode.ctime;
+    out->mtime      = (time_t)inode.mtime;
+    out->atime      = (time_t)inode.atime;
+    out->inodeBlock = inodeBlock;
+
+    return TFS_SUCCESS;
+}
+
     return TFS_SUCCESS;
 }
