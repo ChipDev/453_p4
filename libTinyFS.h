@@ -35,3 +35,7 @@ int tfs_deleteFile(fileDescriptor FD);
 int tfs_readByte(fileDescriptor FD, char *buffer);
 
 int tfs_seek(fileDescriptor FD, int offset);
+
+int tfs_readdir(void);
+
+int tfs_rename(fileDescriptor FD, char *newName);

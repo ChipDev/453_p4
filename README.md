@@ -1,5 +1,9 @@
 =======
 # 453 Project 4
+## Authors:
+- Blake R. Stewart
+- Dwight Anthony Taylor Jr
+- Amarbir Janda
 
 ## Phase I
 
