@@ -497,6 +497,48 @@ int tfs_readdir(void) {
     return TFS_SUCCESS;
 }
 
+int tfs_readByte(fileDescriptor FD, char *buffer) {
+	if(!disk_no) return ERR_NOT_MOUNTED;
+	if(!isValidFD(FD)) return ERR_FD_INVALID;
+	if(!buffer) return ERR_BUF;
+
+	int in_block = openFiles[FD].inodeBlock;
+	struct inode_disk in = {0};
+	if (readBlock(disk_no, in_block, &in) != TFS_SUCCESS) {
+		return ERR_DISK_READ;
+	}
+	//now we have the inode block; get pointer
+	int fp = openFiles[FD].filePointer;
+	if(fp >= in.size_B) {
+		//at or beyond the eof
+		return ERR_EOF;	
+	}
+	//figure out where to read
+	// byte --> disk read and offset
+	// Remember that each file extent only holds EX_E bytes (250?)
+	int extent_i = fp / EX_E;
+	int extent_off = fp % EX_E;
+	struct fileextent_disk fext = {0};
+	int node_block = in.blk_start;
+	//start at inode head; walk linkedlist.
+	for(int i = 0; i < extent_i; i++){
+		if(node_block <= 0) { return ERR_FS_INVALID; }
+		if(readBlock(disk_no, node_block, &fext) != TFS_SUCCESS) {
+			return ERR_DISK_READ;
+		}
+		node_block = fext.blk_next; 
+	}	
+	//node_block is now the extent_ith block
+	if(readBlock(disk_no, node_block, &fext) != TFS_SUCCESS) {
+		return ERR_DISK_READ;
+	}
+	*buffer = ext.data[extent_off];
+	//already compensatas for the struct offset.
+	///as per pdf
+	openFiles[FD].filePointer = fp + 1;
+	return TFS_SUCCEESS;
+}
+
 int readFileInfo(fielDescripto FD, tfsFileInfo *out) {
     if (disk_no == -1) return ERR_NOT_MOUNTED;
     if (!isValidFD(FD)) return ERR_FD_INVALID;
