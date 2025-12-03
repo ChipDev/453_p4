@@ -572,7 +572,7 @@ int readFileInfo(fileDescriptor FD, tfsFileInfo *out) {
     out->ctime      = (time_t)inode.ctime;
     out->mtime      = (time_t)inode.mtime;
     out->atime      = (time_t)inode.atime;
-    out->inodeBlock = inodeBlock;
+    out->inode_block = inodeBlock;
 
     return TFS_SUCCESS;
 }
