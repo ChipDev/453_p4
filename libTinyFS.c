@@ -10,6 +10,19 @@
 #include <string.h>
 #include "blocktypes.h"
 
+//maximum open files at a time
+#define MAX_OPEN_FILES 20
+
+typedef struct open_file {
+	int inUse;	        //1 if this entry is in use, 0 otherwise
+	int inodeBlock;		//block number where the inode is stored
+	int in_use;		    // current read/write position in file
+	char name[9];       //name of the file
+} Open FileEntry;
+
+//static resource table
+static OpenFileEntry openFiles[MAX_OPEN_FILES];
+
 //Only a single disk may be mounted at a time.
 static int disk_no = -1;
 
@@ -93,4 +106,70 @@ int tfs_unmount(void) {
 	if(closeDisk(disk_no) != TFS_SUCCESS) return ERR_DISK_CLOSE; 
 	disk_no = -1;
 	return TFS_SUCCESS;
+}
+
+
+fileDescriptor tfs_openFile(char *name) {
+    if (disk_no == -1) return ERR_NOT_MOUNTED;
+    if (!name) return ERR_FILE_NAME;
+    if (strlen(name) == 0 || strlen(name) > 8) return ERR_FILE_NAME;
+    // check if file is already open in the resource table 
+    for (int i = 0; i < MAX_OPEN_FILES; i++) {
+        if (openFiles[i].inUse && strncmp(openFiles[i].name, name, 8) == 0) {
+            //if file open return existing fd
+            return i;
+        }
+    }// find free slot in the resource table 
+    int fd = findFreeFileSlot();
+    if (fd < 0) {
+        return ERR_FD_INVALID; //too many open files
+    }//fine or create the inode for the file
+    int inodeBlock = findOrCreateInode(name);
+    if (inodeBlock < 0) {
+        return ERR_DISK_FULL;
+    } //set up the resource table entry
+    openFiles[fd].inUse = 1;
+    openFiles[fd].inodeBlock = inodeBlock;
+    openFiles[fd].filePointer = 0;
+    strncpy(openFiles[fd].name, name, 8);
+    openFiles[fd].name[8] = '\0';
+    return fd;
+}
+
+// helper that initialize the open files table 
+static void initOpenFilesTable(void) {
+    for (int i = 0; i < MAX_OPEN_FILES; i++) {
+        openFiles[i].inUse = 0;
+        openFiles[i].inodeBlock = -1;
+        openFiles[i].filePointer = 0;
+        openFiles[i].name[0] = '\0';
+    }
+}
+
+// helper that find a free slot in the open files table */
+static int findFreeFileSlot(void) {
+    for (int i = 0; i < MAX_OPEN_FILES; i++) {
+        if (!openFiles[i].inUse) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// helper that checks if a fd is valid
+static int isValidFD(fileDescriptor FD) {
+    if (FD < 0 || FD >= MAX_OPEN_FILES) return 0;
+    if (!openFiles[FD].inUse) return 0;
+    return 1;
+}
+
+
+int tfs_closeFile(fileDescriptor FD) {
+    if (disk_no == -1) return ERR_NOT_MOUNTED;
+    if (!isValidFD(FD)) return ERR_FD_INVALID;//clear resource table entry 
+    openFiles[FD].inUse = 0;
+    openFiles[FD].inodeBlock = -1;
+    openFiles[FD].filePointer = 0;
+    openFiles[FD].name[0] = '\0';
+    return TFS_SUCCESS;
 }
