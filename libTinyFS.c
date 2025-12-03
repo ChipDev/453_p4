@@ -42,7 +42,7 @@ static int load_inode_from_fd(fileDescriptor FD, inode_disk *inodeOut, int *blkN
 
 int tfs_mkfs(char *filename, int nBytes) {
 	if(!filename) return ERR_FS_NAME;
-	if(strlen(filename) == 0 || strlen(filename) > 8) return ERR_FS_NAME;
+	if(strlen(filename) == 0) return ERR_FS_NAME;
 	// block 0: superblock
 	// block 1: root inode
 	int nb = nBytes;
@@ -552,27 +552,4 @@ int tfs_readByte(fileDescriptor FD, char *buffer) {
 	return TFS_SUCCESS;
 }
 
-int readFileInfo(fileDescriptor FD, tfsFileInfo *out) {
-    if (disk_no == -1) return ERR_NOT_MOUNTED;
-    if (!isValidFD(FD)) return ERR_FD_INVALID;
-    if (!out) return ERR_FS_INVALID;
 
-    inode_disk inode;
-    int inodeBlock;
-    int rc = load_inode_from_fd(FD, &inode, &inodeBlock);
-    if (rc < 0) return rc;
-
-    memset(out, 0, sizeof(*out));
-
-    // copy name
-    strncpy(out->name, inode.name, 8);
-    out->name[8] = '\0';
-
-    out->size_B     = (int)inode.size_B;
-    out->ctime      = (time_t)inode.ctime;
-    out->mtime      = (time_t)inode.mtime;
-    out->atime      = (time_t)inode.atime;
-    out->inodeBlock = inodeBlock;
-
-    return TFS_SUCCESS;
-}
