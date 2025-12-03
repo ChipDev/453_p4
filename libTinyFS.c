@@ -12,8 +12,6 @@
 #include <time.h>
 #include "blocktypes.h"
 
-<<<<<<< HEAD
-=======
 //maximum open files at a time
 #define MAX_OPEN_FILES 20
 
@@ -27,7 +25,7 @@ typedef struct open_file {
 //static resource table
 static OpenFileEntry openFiles[MAX_OPEN_FILES];
 
->>>>>>> 2e9f83466781b18a80655de117bdbba7d3fb975c
+
 //Only a single disk may be mounted at a time.
 static int disk_no = -1;
 
@@ -121,8 +119,7 @@ int tfs_unmount(void) {
 	return TFS_SUCCESS;
 }
 
-<<<<<<< HEAD
-=======
+
 
 // helper that initialize the open files table 
 static void initOpenFilesTable(void) {
@@ -235,7 +232,7 @@ int tfs_closeFile(fileDescriptor FD) {
     openFiles[FD].name[0] = '\0';
     return TFS_SUCCESS;
 }
->>>>>>> 2e9f83466781b18a80655de117bdbba7d3fb975c
+
 //returns a block number that you can do anything with (removes it from the free list)
 int allocate_free_block() {
 	if(disk_no == -1) return ERR_NOT_MOUNTED;
@@ -458,10 +455,13 @@ int tfs_rename(fileDescriptor FD, char *newName) {
 
 int tfs_readdir(void) {
     if (disk_no == -1) return ERR_NOT_MOUNTED;
+    
+    inode_disk inode;
+    int blk = 0;
+    int first = 1;
 
     printf("TinyFS directory listing:\n");
 
-<<<<<<< HEAD
     while (1) {
 	int rc = readBlock(disk_no, blk, &inode);
 	if (rc != TFS_SUCCESS) break; // assume this means "no more blocks"
@@ -488,37 +488,7 @@ int tfs_readdir(void) {
 	}
 
 	blk++;
-=======
-    int blk = 1;     // start at root inode
-    int first = 1;
 
-    while (1) {
-        inode_disk inode;
-        int rc = readBlock(disk_no, blk, &inode);
-        if (rc != TFS_SUCCESS) break; // assume past end of disk / error
-
-        if (inode.blocktype == INODE && inode.magic == MAGIC) {
-            // skip "empty" inodes (except root)
-            if (blk != ROOT_INODE_BLOCK &&
-                inode.name[0] == '\0' &&
-                inode.size_B == 0) {
-                blk++;
-                continue;
-            }
-
-            char nameBuf[10] = {0}; // 9 chars + NUL
-            strncpy(nameBuf, inode.name, 9);
-            nameBuf[9] = '\0';
-
-            printf("    block %2d %-9s  %u bytes\n",
-                   blk, nameBuf, (unsigned)inode.size_B);
-
-            first = 0;
-        }
-
-        blk++;
->>>>>>> 2e9f83466781b18a80655de117bdbba7d3fb975c
-    }
 
     if (first) {
         printf("  [no files]\n");
@@ -550,11 +520,4 @@ int readFileInfo(fielDescripto FD, tfsFileInfo *out) {
     out->inodeBlock = inodeBlock;
 
     return TFS_SUCCESS;
-<<<<<<< HEAD
-} 
-=======
 }
-
-    return TFS_SUCCESS;
-}
->>>>>>> 2e9f83466781b18a80655de117bdbba7d3fb975c
