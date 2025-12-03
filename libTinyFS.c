@@ -129,6 +129,7 @@ int free_block(int block) {
 	
 	sb.free_block = block; 
 	if(writeBlock(disk_no, SUPERBLOCK_BLOCK, &sb) != TFS_SUCCESS) return ERR_DISK_WRITE;
+	return TFS_SUCCESS;
 }
 
 
