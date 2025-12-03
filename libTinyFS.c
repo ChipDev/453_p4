@@ -173,3 +173,42 @@ int tfs_closeFile(fileDescriptor FD) {
     openFiles[FD].name[0] = '\0';
     return TFS_SUCCESS;
 }
+//returns a block number that you can do anything with (removes it from the free list)
+int allocate_free_block() {
+	if(disk_no == -1) return ERR_NOT_MOUNTED;
+	superblock_disk sb = {0};
+	if (readBlock(disk_no, SUPERBLOCK_BLOCK, &sb) != TFS_SUCCESS) return ERR_DISK_READ;
+	if (sb.free_block == 0) return ERR_FS_FULL; //use 0 not -1 
+
+	int block = sb.free_block; //first in pointer
+	free_disk freedisk = {0};
+	if(readBlock(disk_no, block, &freedisk) != TFS_SUCCESS) return ERR_DISK_READ;
+	sb.free_block = freedisk.blk_next;
+
+	//writeback
+	if (writeBlock(disk_no, SUPERBLOCK_BLOCK, &sb) != TFS_SUCCESS) return ERR_DISK_WRITE;	
+	return block;
+}
+
+//once done with a block free it and it goes back onto the free linkedlist
+int free_block(int block) {
+	if(disk_no == -1) return ERR_NOT_MOUNTED;
+	superblock_disk sb = {0};
+	if (readBlock(disk_no, SUPERBLOCK_BLOCK, &sb) != TFS_SUCCESS) return ERR_DISK_READ;
+	
+	free_disk fb = {0};
+	fb.blocktype = FREE;
+  	fb.magic = MAGIC;
+ 	fb.blk_next = sb.free_block;	
+	//FIRST write the free block, if successful then change the superblock (it isn't like we're allowing errors)
+
+	if(writeBlock(disk_no, block, &fb) != TFS_SUCCESS) return ERR_DISK_WRITE;
+	//written free block.
+	
+	sb.free_block = block; 
+	if(writeBlock(disk_no, SUPERBLOCK_BLOCK, &sb) != TFS_SUCCESS) return ERR_DISK_WRITE;
+	return TFS_SUCCESS;
+}
+
+
+
