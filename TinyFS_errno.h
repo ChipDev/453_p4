@@ -26,4 +26,5 @@
 #define ERR_DISK_FULL -16
 #define ERR_FS_NAME -17
 #define ERR_BUF -18
+#define ERR_FS_FULL -19
 #endif

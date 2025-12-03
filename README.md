@@ -5,6 +5,10 @@
 - Dwight Anthony Taylor Jr
 - Amarbir Janda
 
+
+## Overview 
+This project implements a custom filesystem called TinyFS on top of the file-based disk emulator. 
+
 ## Phase I
 
 ### Blake
@@ -23,3 +27,10 @@
 - A disk contains a filesystem (tinyFS)
 - The filesystem is mountable and contains files
 - Opening files gives file descriptors
+
+### To Run
+
+`make`
+`./tinyFSDemo`
+
+
