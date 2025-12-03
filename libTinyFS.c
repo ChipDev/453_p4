@@ -553,3 +553,14 @@ int tfs_readByte(fileDescriptor FD, char *buffer) {
 }
 
 
+<<<<<<< HEAD
+=======
+    out->size_B     = (int)inode.size_B;
+    out->ctime      = (time_t)inode.ctime;
+    out->mtime      = (time_t)inode.mtime;
+    out->atime      = (time_t)inode.atime;
+    out->inode_block = inodeBlock;
+
+    return TFS_SUCCESS;
+}
+>>>>>>> 22e85ea757dc3a67b31ab9dc0140f85dc5c0c275
