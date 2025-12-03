@@ -267,6 +267,7 @@ int free_block(int block) {
 	
 	sb.free_block = block; 
 	if(writeBlock(disk_no, SUPERBLOCK_BLOCK, &sb) != TFS_SUCCESS) return ERR_DISK_WRITE;
+	return TFS_SUCCESS;
 }
 
 int tfs_writeFile(fileDescriptor FD, char *buffer, int size) {
@@ -498,7 +499,7 @@ int tfs_readdir(void) {
 }
 
 int tfs_readByte(fileDescriptor FD, char *buffer) {
-	if(!disk_no) return ERR_NOT_MOUNTED;
+	if(disk_no == -1) return ERR_NOT_MOUNTED;
 	if(!isValidFD(FD)) return ERR_FD_INVALID;
 	if(!buffer) return ERR_BUF;
 
@@ -532,11 +533,11 @@ int tfs_readByte(fileDescriptor FD, char *buffer) {
 	if(readBlock(disk_no, node_block, &fext) != TFS_SUCCESS) {
 		return ERR_DISK_READ;
 	}
-	*buffer = ext.data[extent_off];
+	*buffer = fext.data[extent_off];
 	//already compensatas for the struct offset.
 	///as per pdf
 	openFiles[FD].filePointer = fp + 1;
-	return TFS_SUCCEESS;
+	return TFS_SUCCESS;
 }
 
 int readFileInfo(fielDescripto FD, tfsFileInfo *out) {
