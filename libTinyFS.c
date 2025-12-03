@@ -8,10 +8,11 @@
 #include "libDisk.h"
 #include "TinyFS_errno.h"
 #include <string.h>
+#include "blocktypes.h"
 
 int tfs_mkfs(char *filename, int nBytes) {
-	if(!filename) return ERR_FS_INVALID
-	if(strlen(filename) == 0 || strlen(filename) > 8) return ERR_FS_INVALID
+	if(!filename) return ERR_FS_INVALID;
+	if(strlen(filename) == 0 || strlen(filename) > 8) return ERR_FS_INVALID;
 	// block 0: superblock
 	// block 1: root inode
 	int nb = nBytes;
@@ -24,7 +25,7 @@ int tfs_mkfs(char *filename, int nBytes) {
 	
 	//write block 0 (superblck) and 1 (root inode)
 	struct superblock_disk sb = {0};
-	sb.blocktype = blocktype.SUPERBLOCK;
+	sb.blocktype = SUPERBLOCK;
 	sb.magic = 0x44;
 	sb.root_inode = ROOT_INODE_BLOCK;	// block 1 = root inode
 	sb.free_block = 2;			// block 2 = free (first).
@@ -35,11 +36,11 @@ int tfs_mkfs(char *filename, int nBytes) {
 	}
 	
 	struct inode_disk rin = {0};
-	rin.blocktype = blocktype.INODE;
+	rin.blocktype = INODE;
 	rin.magic = MAGIC;
-	strcpy(in.name, "/");
-	rin.size_B = nb;
-	rin.blk_start = -1;	//initially - 1 if no data
+	strcpy(rin.name, "/");
+	rin.size_B = 0;
+	rin.blk_start = 0;	//we're using 0 now instead of -1
 	rin.metaflags = INODE_INITIAL_FLAGS; 
 
 	if(writeBlock(disk, ROOT_INODE_BLOCK, &rin) != TFS_SUCCESS) {
@@ -48,12 +49,12 @@ int tfs_mkfs(char *filename, int nBytes) {
 	}
 	//fill the rest with free blocks
 	int blocks = nb / BLOCKSIZE;
-	if(blocks < 3) { printf("What do do in this situation??\n"); return -1; }
+	if(blocks < 3) { printf("What do do in this situation??\n"); closeDisk(disk); return -1; }
 
 	for(int i = 2; i < blocks; i++) {
 		printf("setting block %d to free\n", i);
 		struct free_disk free = {0};
-		free.blocktype = blocktype.FREE;
+		free.blocktype = FREE;
 		free.magic = MAGIC;
 		free.blk_next = (i != blocks - 1) ? i + 1 : 0;	//quickly sets up the rest as free, last -> 0
 		if(writeBlock(disk, i, &free) != TFS_SUCCESS) {
@@ -61,4 +62,5 @@ int tfs_mkfs(char *filename, int nBytes) {
 			return ERR_DISK_WRITE;
 		}		
 	} 
+	return TFS_SUCCESS;
 }
