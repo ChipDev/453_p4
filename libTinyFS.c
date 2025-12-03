@@ -29,6 +29,17 @@ static OpenFileEntry openFiles[MAX_OPEN_FILES];
 //Only a single disk may be mounted at a time.
 static int disk_no = -1;
 
+//helper prototypes
+static void initOpenFilesTable(void);
+static int findFreeFileSlot(void);
+static int isValidFD(fileDescriptor FD);
+static int findInodeByName(const char *name);
+static int findOrCreateInode(const char *name);
+int allocate_free_block(void);
+int free_block(int block);
+static int load_inode_from_fd(fileDescriptor FD, inode_disk *inodeOut, int *blkNumOut);
+
+
 int tfs_mkfs(char *filename, int nBytes) {
 	if(!filename) return ERR_FS_NAME;
 	if(strlen(filename) == 0 || strlen(filename) > 8) return ERR_FS_NAME;
@@ -238,7 +249,7 @@ int allocate_free_block() {
 	if(disk_no == -1) return ERR_NOT_MOUNTED;
 	superblock_disk sb = {0};
 	if (readBlock(disk_no, SUPERBLOCK_BLOCK, &sb) != TFS_SUCCESS) return ERR_DISK_READ;
-	if (sb.free_block == 0) return ERR_FS_FULL; //use 0 not -1 
+	if (sb.free_block == 0) return ERR_DISK_FULL; //use 0 not -1 
 
 	int block = sb.free_block; //first in pointer
 	free_disk freedisk = {0};
@@ -489,7 +500,7 @@ int tfs_readdir(void) {
 	}
 
 	blk++;
-
+	}
 
     if (first) {
         printf("  [no files]\n");
@@ -497,6 +508,7 @@ int tfs_readdir(void) {
 
     return TFS_SUCCESS;
 }
+
 
 int tfs_readByte(fileDescriptor FD, char *buffer) {
 	if(disk_no == -1) return ERR_NOT_MOUNTED;
