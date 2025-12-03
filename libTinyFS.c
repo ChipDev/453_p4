@@ -16,9 +16,9 @@
 typedef struct open_file {
 	int inUse;	        //1 if this entry is in use, 0 otherwise
 	int inodeBlock;		//block number where the inode is stored
-	int in_use;		    // current read/write position in file
+	int filePointer; 	// current read/write position in file
 	char name[9];       //name of the file
-} Open FileEntry;
+} OpenFileEntry;
 
 //static resource table
 static OpenFileEntry openFiles[MAX_OPEN_FILES];
@@ -98,6 +98,8 @@ int tfs_mount(char *diskname){
 		disk_no = -1;
 		return ERR_FS_INVALID;
 	}
+	//initialize the open files table
+	initOpenFilesTable();
 	return TFS_SUCCESS;
 }
 
@@ -108,6 +110,79 @@ int tfs_unmount(void) {
 	return TFS_SUCCESS;
 }
 
+
+// helper that initialize the open files table 
+static void initOpenFilesTable(void) {
+    for (int i = 0; i < MAX_OPEN_FILES; i++) {
+        openFiles[i].inUse = 0;
+        openFiles[i].inodeBlock = -1;
+        openFiles[i].filePointer = 0;
+        openFiles[i].name[0] = '\0';
+    }
+}
+
+// helper that find a free slot in the open files table */
+static int findFreeFileSlot(void) {
+    for (int i = 0; i < MAX_OPEN_FILES; i++) {
+        if (!openFiles[i].inUse) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// helper that checks if a fd is valid
+static int isValidFD(fileDescriptor FD) {
+    if (FD < 0 || FD >= MAX_OPEN_FILES) return 0;
+    if (!openFiles[FD].inUse) return 0;
+    return 1;
+}
+
+static int findInodeByName(const char *name) {
+    if (disk_no < 0 || !name) return -1;
+    inode_disk inode;
+    int blockNum = 2; // start searching from block 2
+    while (1) {
+        if (readBlock(disk_no, blockNum, &inode) != TFS_SUCCESS) {
+            break;
+        }
+        if (inode.blocktype == INODE && inode.magic == MAGIC) {
+            if (strncmp(inode.name, name, 8) == 0) {
+                return blockNum;
+            }
+        }
+        blockNum++;
+        if (blockNum > 1000) break;
+    }
+    return -1;
+}
+
+static int findOrCreateInode(const char *name) {
+    // first try and find existing
+    int existing = findInodeByName(name);
+    if (existing > 0) {
+        return existing;
+    }
+    // if not found allocate new block
+    int newBlock = allocate_free_block();
+    if (newBlock < 0) {
+        return -1;
+    }
+    //initialize new Inode
+    inode_disk newInode = {0};
+    newInode.blocktype = INODE;
+    newInode.magic = MAGIC;
+    strncpy(newInode.name, name, 8);
+    newInode.name[8] = '\0';
+    newInode.size_B = 0;
+    newInode.blk_start = 0;
+    newInode.metaflags = INODE_INITIAL_FLAGS;
+    if (writeBlock(disk_no, newBlock, &newInode) != TFS_SUCCESS) {
+        free_block(newBlock);
+        return -1;
+    }
+    return newBlock;
+}
 
 fileDescriptor tfs_openFile(char *name) {
     if (disk_no == -1) return ERR_NOT_MOUNTED;
@@ -136,32 +211,6 @@ fileDescriptor tfs_openFile(char *name) {
     return fd;
 }
 
-// helper that initialize the open files table 
-static void initOpenFilesTable(void) {
-    for (int i = 0; i < MAX_OPEN_FILES; i++) {
-        openFiles[i].inUse = 0;
-        openFiles[i].inodeBlock = -1;
-        openFiles[i].filePointer = 0;
-        openFiles[i].name[0] = '\0';
-    }
-}
-
-// helper that find a free slot in the open files table */
-static int findFreeFileSlot(void) {
-    for (int i = 0; i < MAX_OPEN_FILES; i++) {
-        if (!openFiles[i].inUse) {
-            return i;
-        }
-    }
-    return -1;
-}
-
-// helper that checks if a fd is valid
-static int isValidFD(fileDescriptor FD) {
-    if (FD < 0 || FD >= MAX_OPEN_FILES) return 0;
-    if (!openFiles[FD].inUse) return 0;
-    return 1;
-}
 
 
 int tfs_closeFile(fileDescriptor FD) {
@@ -210,5 +259,127 @@ int free_block(int block) {
 	return TFS_SUCCESS;
 }
 
+int tfs_writeFile(fileDescriptor FD, char *buffer, int size) {
+    if (disk_no == -1) return ERR_NOT_MOUNTED;
+    if (!isValidFD(FD)) return ERR_FD_INVALID;
+    if (!buffer && size > 0) return ERR_DISK_WRITE;
+    int inodeBlock = openFiles[FD].inodeBlock;
+    // free existing data blocks
+    inode_disk inode;
+    if (readBlock(disk_no, inodeBlock, &inode) != TFS_SUCCESS) {
+        return ERR_DISK_READ;
+    }
+    // free all data blocks
+    int currentBlock = inode.blk_start;
+    while (currentBlock != 0) {
+        fileextent_disk extent;
+        if (readBlock(disk_no, currentBlock, &extent) != TFS_SUCCESS) {
+            break;
+        }
+        int nextBlock = extent.blk_next;
+        free_block(currentBlock);
+        currentBlock = nextBlock;
+	}
+    // if size is 0, just update inode and return
+    if (size == 0) {
+        inode.blk_start = 0;
+        inode.size_B = 0;
+        writeBlock(disk_no, inodeBlock, &inode);
+        openFiles[FD].filePointer = 0;
+        return TFS_SUCCESS;
+    }
+    // calculate number of blocks needed
+    int dataPerBlock = EX_E;
+    int blocksNeeded = (size + dataPerBlock - 1) / dataPerBlock;
+    
+    // allocate required blocks
+    int *blocks = malloc(blocksNeeded * sizeof(int));
+    if (!blocks) return ERR_DISK_WRITE;
+    for (int i = 0; i < blocksNeeded; i++) {
+        blocks[i] = allocate_free_block();
+        if (blocks[i] < 0) {
+            // allocation failed, free already allocated blocks
+            for (int j = 0; j < i; j++) {
+                free_block(blocks[j]);
+            }
+            free(blocks);
+            return ERR_DISK_FULL;
+        }
+    }
+    // write data into allocated blocks
+    int bytesWritten = 0;
+    for (int i = 0; i < blocksNeeded; i++) {
+        fileextent_disk extent = {0};
+        extent.blocktype = FILEEXTENT;
+        extent.magic = MAGIC;
+        extent.blk_next = (i < blocksNeeded - 1) ? blocks[i + 1] : 0;
+        int bytesToWrite = size - bytesWritten;
+        if (bytesToWrite > dataPerBlock) {
+            bytesToWrite = dataPerBlock;
+        }
+        memcpy(extent.data, buffer + bytesWritten, bytesToWrite);
+        bytesWritten += bytesToWrite;
+        if (writeBlock(disk_no, blocks[i], &extent) != TFS_SUCCESS) {
+            free(blocks);
+            return ERR_DISK_WRITE;
+        }
+    }
+	// Update inode
+    inode.blk_start = blocks[0];
+    inode.size_B = size;
+    if (writeBlock(disk_no, inodeBlock, &inode) != TFS_SUCCESS) {
+        free(blocks);
+        return ERR_DISK_WRITE;
+    }
+    free(blocks);
+    openFiles[FD].filePointer = 0;
+    return TFS_SUCCESS;
+}
 
+int tfs_deleteFile(fileDescriptor FD) {
+    if (disk_no == -1) return ERR_NOT_MOUNTED;
+    if (!isValidFD(FD)) return ERR_FD_INVALID;
+    int inodeBlock = openFiles[FD].inodeBlock;
+	// read the inode to get the data block chain
+    inode_disk inode;
+    if (readBlock(disk_no, inodeBlock, &inode) != TFS_SUCCESS) {
+        return ERR_DISK_READ;
+    } // free all data blocks
+    int currentBlock = inode.blk_start;
+    while (currentBlock != 0) {
+        fileextent_disk extent;
+        if (readBlock(disk_no, currentBlock, &extent) != TFS_SUCCESS) {
+            break;
+        }
+        int nextBlock = extent.blk_next;
+        free_block(currentBlock);
+        currentBlock = nextBlock;
+    }
+    // free the inode block
+    free_block(inodeBlock);
+	// clear resource table entry
+    openFiles[FD].inUse = 0;
+    openFiles[FD].inodeBlock = -1;
+    openFiles[FD].filePointer = 0;
+    openFiles[FD].name[0] = '\0';
+    
+    return TFS_SUCCESS;
+}
 
+int tfs_seek(fileDescriptor FD, int offset) {
+    if (disk_no == -1) return ERR_NOT_MOUNTED;
+    if (!isValidFD(FD)) return ERR_FD_INVALID;
+    if (offset < 0) return ERR_SEEK;
+    // read inode to get file size
+    inode_disk inode;
+    if (readBlock(disk_no, openFiles[FD].inodeBlock, &inode) != TFS_SUCCESS) {
+        return ERR_DISK_READ;
+    }
+    // checlk if offset is within file size
+    if (offset > inode.size_B) {
+        return ERR_SEEK;
+    }
+    //set file pointer to new offset
+    openFiles[FD].filePointer = offset;
+    return TFS_SUCCESS;
+}
