@@ -1,4 +1,8 @@
-/* Error codes */
+/* 
+*
+* TinyFS errno header 
+*
+*/ 
 
 #ifndef TINYFS_ERRNO_H
 #define TINYFS_ERRNO_H

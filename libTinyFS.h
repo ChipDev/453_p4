@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "blocktypes.h" 
 
 /* The default size of the disk and file system block */
 #define BLOCKSIZE 256
