@@ -8,6 +8,8 @@
 #include "libDisk.h"
 #include "TinyFS_errno.h"
 #include <string.h>
+#include <stdio.h>
+#include <time.h>
 #include "blocktypes.h"
 
 //Only a single disk may be mounted at a time.
@@ -45,6 +47,12 @@ int tfs_mkfs(char *filename, int nBytes) {
 	rin.size_B = 0;
 	rin.blk_start = 0;	//we're using 0 now instead of -1
 	rin.metaflags = INODE_INITIAL_FLAGS; 
+
+	// new: initialize root inode timestamps
+	time_t now = time(NULL);
+	rin.ctime = (uint32_t)now;
+	rin.mtime = (uint32_t)now;
+	rin.atime = (uint32_t)now;
 
 	if(writeBlock(disk, ROOT_INODE_BLOCK, &rin) != TFS_SUCCESS) {
 		closeDisk(disk); 
@@ -132,4 +140,113 @@ int free_block(int block) {
 }
 
 
+// helper: load inode given a fileDescriptor (assumed to be inode block number)
+static int load_inode_from_fd(fileDescriptor FD, inode_disk *inodeOut, int *blkNumOut) {
+    if (disk_no == -1) return ERR_NOT_MOUNTED;
+    if (FD < 0) return ERR_FS_INVALID; // or define ERR_BAD_FD
 
+    if (readBlock(disk_no, FD, inodeOut) != TFS_SUCCESS)
+	return ERR_DISK_READ;
+
+    if (inodeOut->blockType != INODE || inodeOut->magic != MAGIC)
+	return ERR_FS_INVALID;
+
+    if (blkNUmOut) *blkNumOut = FD;
+	return TFS_SUCCESS;
+}
+
+int tfs_rename(fileDescriptor FD, char *newName) {
+    if (disk_no == -1) return ERR_NOT_MPUNTED;
+    if (!newName) return ERR_FS_NAME;
+
+    size_t len = strlen(newName);
+    if (len == 0 || len > 8) return ERR_FS_NAME; // same style as tfs_mkfs
+
+    inode_disk inode;
+    int inodeBlock;
+    int rc = load_inode_from_fd(FD, &inode, &inodeBlock);
+    if (rc < 0) return rc;
+
+    // copy new name into fixed 9-byte array
+    memset(inode.name, 0, sizeof(inode.name));
+    memcpy(inode.name, newName, len);
+
+    // update timestamps: metadata change -> mtime & atime
+    time_t now = time(NULL);
+    inode.mtime = (uint32_t)now;
+    inode.atime = (uint32_t)not;
+
+    if (writeBlock(disk_no, inodeBlock, &inode) != TFS_SUCCESS)
+	return ERR_DISK_WRITE;
+
+    return TFS_SUCCESS;
+}
+
+int tfs_readdir(void) {
+    if (disk_no == -1) return ERR_NOT_MOUNTED;
+
+    inode_disk inode;
+    int blk = 0;
+    int first = 1;
+
+    printf("TinyFS directory listing:\n");
+
+    while (1) {
+	int rc = readBlock(disk_no, blk, &inode);
+	if (rc != TFS_SUCCESS) break; // assume this means "no more blocks"
+
+	if (inode.blocktype == INODE && inode.magic == MAGIC) {
+
+	    // skip completely / unused inode slots if you mark them that way
+	    if (inode.name[0] == '\0' && inode.size_B == 0 && blk != ROOT_INODE_BLOCK) {
+		blk++;
+		continue;
+	    }
+
+	    char nameBuf[10] = {0};
+	    strncpy(nameBuf, inode.name, 9);
+	    nameBuf[9] = '\0';
+
+	    if (first) {
+		first = 0;
+	    }
+
+	    printf("    block %2d %-9s  %u bytes\n",
+		   blk, nameBuf, (unsigned)inode.size_B);
+
+	}
+
+	blk++;
+
+    }
+
+    if (first) {
+	printf("  [no files]\n");
+    }
+
+    return TFS_SUCCESS;
+} 
+
+int tfs_readFileInfo(fileDescriptor FD, tfsFileInfo *out) {
+    if (disk_no == -1) return ERR_NOT_MOUNTED;
+    if (!out) return ERR_FS_INVALID; // or some generic error
+
+    inode_disk inode;
+    int inodeBlock;
+    int rc = load_inode_from_fd(FD, &inode, &inodeBlock);
+    if (rc < 0) return rc;
+
+    memset(out, 0, sizeof(*out));
+
+    // copy name
+    strncpy(out->name, inode.name, 8);
+    out->name[8] = '\0';
+
+    out->size_B  = (int)inode.size_B;
+    out->ctime   = (time_t)inode.ctime;
+    out->mtime   = (time_t)inode.mtime;
+    out->atime   = (time_t)inode.atime;
+    out->inodeBlock = inodeBlock;
+
+    return TFS_SUCCESS;
+}
