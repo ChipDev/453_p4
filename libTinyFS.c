@@ -540,7 +540,7 @@ int tfs_readByte(fileDescriptor FD, char *buffer) {
 	return TFS_SUCCESS;
 }
 
-int readFileInfo(fielDescripto FD, tfsFileInfo *out) {
+int readFileInfo(fileDescriptor FD, tfsFileInfo *out) {
     if (disk_no == -1) return ERR_NOT_MOUNTED;
     if (!isValidFD(FD)) return ERR_FD_INVALID;
     if (!out) return ERR_FS_INVALID;

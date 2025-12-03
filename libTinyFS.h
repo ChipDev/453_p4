@@ -1,6 +1,12 @@
+
+#ifndef LIBTINYFS_H
+#define LIBTINYFS_H
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
+#include <time.h>
 #include "blocktypes.h" 
 
 /* The default size of the disk and file system block */
@@ -15,6 +21,16 @@
 
 /* Use as a special type to keep track of files */
 typedef int fileDescriptor;
+
+typedef struct tfsFileInfo {
+    char name[9];
+    int32_t size_B;
+    int32_t inode_block;
+
+    int32_t ctime;
+    int32_t mtime;
+    int32_t atime;
+} tfsFileInfo;
 
 /* Function definitions */
 
@@ -39,3 +55,7 @@ int tfs_seek(fileDescriptor FD, int offset);
 int tfs_readdir(void);
 
 int tfs_rename(fileDescriptor FD, char *newName);
+
+int tfs_readFileInfo(fileDescriptor FD, tfsFileInfo *info);
+
+#endif

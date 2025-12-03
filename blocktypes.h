@@ -12,7 +12,7 @@
 #define ROOT_INODE_BLOCK 1
 #define MAGIC 0x44
 #define SB_E (256 - 1 - 1 - 4 - 4) 
-#define IN_E (256 - 1 - 1 - 9 - 4 -4 - 1)
+#define IN_E (256 - 1 - 1 - 9 - 4 - 4 - 1)
 #define EX_E (256 - 1 - 1 - 4)
 #define FR_E (256 - 1 - 1 - 4)
 typedef enum {
@@ -37,6 +37,12 @@ typedef struct inode_disk{
 	int32_t size_B;		//byte 11-14	: SIZE bytes
 	int32_t blk_start;	//byte 15-18	: BLOCK of initial data (can be -1)
 	uint8_t metaflags;	//byte 19	: FLAGS (extra metdata tbd)
+
+	// new timestamps
+	int32_t ctime;
+	int32_t mtime;
+	int32_t atime;
+
 	uint8_t empty[IN_E];
 } inode_disk; 
 
